@@ -11,7 +11,17 @@ namespace UnityEngine.GUID {
       }
 
       // Draw label
-      EditorGUILayout.LabelField("Guid:", guidComp.GetGuid().ToString());
+      var guid = guidComp.GetGuid().ToString();
+      using (new EditorGUILayout.HorizontalScope())
+      {
+          EditorGUILayout.PrefixLabel("Guid");
+          EditorGUILayout.SelectableLabel(guid);
+      }
+      if (Event.current.clickCount == 2)
+      {
+          EditorGUIUtility.systemCopyBuffer = guid;
+          Debug.Log("GUID copied: " + guid);
+      }
     }
   }
 }
