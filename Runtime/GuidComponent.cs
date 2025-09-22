@@ -142,5 +142,19 @@ namespace UnityEngine.GUID {
     public void OnDestroy () {
       GuidManager.Remove(guid);
     }
+
+    public void SetGuid(System.Guid guid) {
+      if(this.guid == guid) return;
+      var taken = GuidManager.ResolveGuid(guid);
+      if(taken != null)
+      {
+        Debug.LogError($"the guid {guid} cannot be assigned to {this.gameObject}, because it is already taken by {taken}");
+        return;
+      }
+      if(this.guid != System.Guid.Empty) GuidManager.Remove(this.guid);
+      this.guid = guid;
+      GuidManager.Add(this)
+    }
+    
   }
 }
