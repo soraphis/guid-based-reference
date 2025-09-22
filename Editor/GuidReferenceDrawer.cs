@@ -21,6 +21,8 @@ namespace UnityEngine.GUID {
     }
 
     public override void OnGUI (Rect position, SerializedProperty property, GUIContent label) {
+      if( Selection.gameObjects.Length > 1 ) return; // simple fix for https://github.com/Unity-Technologies/guid-based-reference/issues/17
+    
       guidProp = property.FindPropertyRelative("serializedGuid");
       nameProp = property.FindPropertyRelative("cachedName");
       sceneProp = property.FindPropertyRelative("cachedScene");
