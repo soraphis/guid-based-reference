@@ -153,7 +153,7 @@ namespace UnityEngine.GUID {
       }
       if(this.guid != System.Guid.Empty) GuidManager.Remove(this.guid);
       this.guid = guid;
-      GuidManager.Add(this)
+      GuidManager.Add(this);
     }
     
   }
