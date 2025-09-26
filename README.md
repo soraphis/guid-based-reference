@@ -16,10 +16,11 @@ Typical uses:
 
 ## Install
 
-**Option A — Copy:** Drop `Assets/CrossSceneReference` into your project.  
-**Option B — Submodule:** Add this repo as a Git submodule under `Assets/` to keep it updatable.
+Use this githubs repo url in the unity package manager.
 
-> This repository is not a UPM package. If you want UPM, add a `package.json` and move sources under `Packages/<name>/` (PRs welcome).
+```
+git@github.com:soraphis/guid-based-reference.git
+```
 
 ---
 
