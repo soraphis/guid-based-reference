@@ -44,18 +44,13 @@ public class UsesGuid : MonoBehaviour
 }
 ````
 
-Sample scenes: `CrossSceneReference/SampleContent` → open **LoadFirst**, press **LoadSecond**.
-You’ll see the referencing object find its target and both start spinning. ([GitHub][1])
-
 ---
 
 ## API surface (tiny)
 
 * **GuidComponent**
-
   * Serialized GUID assigned on creation/validation; kept stable across domain reloads.
 * **GuidReference**
-
   * `gameObject` → `GameObject` or `null` if not present/loaded.
 
 ---
@@ -89,7 +84,6 @@ You’ll see the referencing object find its target and both start spinning. ([G
 ## Contributing
 
 Small, surgical PRs preferred (bugfix with repro, minimal API impact).
-If you propose API changes, include upgrade notes.
 
 ---
 
