@@ -1,18 +1,106 @@
-## Guid Based Reference
-License - Please see [LICENSE.md](LICENSE.md) in this repository
+# Guid-Based Reference (Maintained Fork)
 
-### Summary
-A component to give a Globaly Unique IDentifier (GUID) to a Game Object. This GUID can then be used to reference an
-object even if it is another Scene, not loaded yet, or otherwise not easy to directly reference.
+> Lightweight GUIDs for **GameObjects** so you can keep references across scenes and loads.
 
-### Maintainers
-William Armstrong williama@unity3d.com
+## What this does
 
-### How to use
-1. Add a GuidComponent to any object you want to be able to reference.
-2. In any code that needs to be able to reference objects by GUID, add a GuidReference field.
-3. GuidReference.gameObject will then return the GameObject if it is loaded, otherwise null.
+Adds a `GuidComponent` to a GameObject and a serializable `GuidReference` you can store anywhere.  
+`GuidReference.gameObject` resolves to the target if it’s currently loaded; otherwise it’s `null`.
 
-### Sample
-Look in the Samples folder for example usage. Load up the LoadFirst scene, and then use the SceneLoader object to load 'LoadSecond'.  
-You should see the CrossSceneReferencer object find the CrossSceneTarget object, and set both of them to start spinning.
+Typical uses:
+- Cross-scene references without hard scene dependencies
+- Save/load systems that need stable object identities
+- Late-binding references for additively loaded content
+
+---
+
+## Install
+
+**Option A — Copy:** Drop `Assets/CrossSceneReference` into your project.  
+**Option B — Submodule:** Add this repo as a Git submodule under `Assets/` to keep it updatable.
+
+> This repository is not a UPM package. If you want UPM, add a `package.json` and move sources under `Packages/<name>/` (PRs welcome).
+
+---
+
+## Quick start
+
+1) Add **GuidComponent** to any object you want to reference.  
+2) Add a **GuidReference** field where you need to store the reference.  
+3) Use it at runtime:
+
+```csharp
+[Serializable]
+public class UsesGuid : MonoBehaviour
+{
+    [SerializeField] private GuidReference target;
+
+    void Start()
+    {
+        var go = target.gameObject; // null if the target isn't loaded yet
+        if (go) Debug.Log($"Resolved: {go.name}");
+    }
+}
+````
+
+Sample scenes: `CrossSceneReference/SampleContent` → open **LoadFirst**, press **LoadSecond**.
+You’ll see the referencing object find its target and both start spinning. ([GitHub][1])
+
+---
+
+## API surface (tiny)
+
+* **GuidComponent**
+
+  * Serialized GUID assigned on creation/validation; kept stable across domain reloads.
+* **GuidReference**
+
+  * `gameObject` → `GameObject` or `null` if not present/loaded.
+
+---
+
+## Behavior & lifecycle notes
+
+* **Resolution timing:** `GuidReference.gameObject` is only non-null once the target exists in a loaded scene. Check after scene load or when enabling systems that rely on it.
+* **Uniqueness:** The editor script ensures uniqueness; if a duplicate is detected, one of the GUIDs will be regenerated.
+* **Prefab workflows:** Some prefab operations can rewrite GUIDs on instances (e.g. “Revert All” on instances has historically reset GUIDs). Be careful when mass-reverting overrides. ([GitHub][2])
+* **Multi-scene setups:** Works across additively loaded scenes; references resolve as targets load/unload.
+
+---
+
+## Differences vs upstream
+
+* Documentation refreshed; maintainer field updated to reflect community maintenance.
+* Used Saucy/guid-based-reference as source for package manager structure
+* Added a SetGUI method that is required for Save/Load systems ([original issue #27](https://github.com/Unity-Technologies/guid-based-reference/issues/27))
+* Simple fix for selecting multiple objects ([original issue #17](https://github.com/Unity-Technologies/guid-based-reference/issues/17))
+
+---
+
+## Limitations
+
+* Not a replacement for asset GUIDs; this is for **scene objects**.
+* No network replication; it’s local identity only.
+* Thread safety not guaranteed; resolve on the main thread.
+
+---
+
+## Contributing
+
+Small, surgical PRs preferred (bugfix with repro, minimal API impact).
+If you propose API changes, include upgrade notes.
+
+---
+
+## License
+
+See [LICENSE.md](LICENSE.md). (Same as upstream.)
+
+---
+
+## Credits
+
+Originally authored at Unity Technologies by **William Armstrong**. 
+This fork is meant to be community-maintained now.
+
+
