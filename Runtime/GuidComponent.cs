@@ -138,6 +138,11 @@ namespace UnityEngine.GUID {
       return guid;
     }
 
+    public GuidReference ToReference()
+    {
+      return new GuidReference(this);
+    }
+
     // let the manager know we are gone, so other objects no longer find this
     public void OnDestroy () {
       GuidManager.Remove(guid);
