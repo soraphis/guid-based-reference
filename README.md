@@ -46,6 +46,26 @@ public class UsesGuid : MonoBehaviour
 }
 ````
 
+### Component references
+
+Use `GuidReference<T>` to reference a specific component, including one of several components of the same type on a GameObject. In the Inspector, assign a loaded scene component directly or use **Browse** to search all currently loaded scenes, including additively loaded scenes.
+
+```csharp
+[Serializable]
+public class UsesComponentGuid : MonoBehaviour
+{
+  [SerializeField] private GuidReference<BoxCollider> targetCollider;
+
+  void Start()
+  {
+    BoxCollider collider = targetCollider.Component;
+    if (collider) collider.enabled = true;
+  }
+}
+```
+
+The target GameObject needs a `GuidComponent`; the Inspector adds one when needed. `targetCollider.Component` returns `null` while the target component is not loaded. `targetCollider.gameObject` returns its GameObject.
+
 ---
 
 ## API surface (tiny)
@@ -54,6 +74,8 @@ public class UsesGuid : MonoBehaviour
   * Serialized GUID assigned on creation/validation; kept stable across domain reloads.
 * **GuidReference**
   * `gameObject` → `GameObject` or `null` if not present/loaded.
+* **GuidReference<T>**
+  * `Component` → the referenced component or `null` if it is not loaded.
 
 ---
 
@@ -72,10 +94,10 @@ public class UsesGuid : MonoBehaviour
 * Used Saucy/guid-based-reference as source for package manager structure
 * Added a SetGUI method that is required for Save/Load systems ([original issue #27](https://github.com/Unity-Technologies/guid-based-reference/issues/27))
 * Simple fix for selecting multiple objects ([original issue #17](https://github.com/Unity-Technologies/guid-based-reference/issues/17))
+* Added persistent GUIDs for individual components, typed `GuidReference<T>` references, and an Inspector picker for loaded scenes. This feature is based on the approach in [EmreDogann's stable `v1` branch](https://github.com/EmreDogann/unity-guid-reference/tree/v1).
 * Updated the package minimum to Unity 6.3 and replaced the legacy edit-mode/prefab-stage APIs with their current equivalents.
 * Improved prefab stability by excluding prefab assets, prefab stages, and preview scenes from GUID assignment, and preserving an existing GUID when Unity temporarily clears its serialized data during prefab operations.
 * Added regression coverage for prefab contents and temporarily cleared GUID data; prefab tests now use `PrefabUtility.SaveAsPrefabAsset`.
-* `SetGuid` rejects empty GUIDs, updates serialized data immediately, and preserves the existing registration when reassignment fails.
 
 ---
 
@@ -105,5 +127,6 @@ Originally authored at Unity Technologies by **William Armstrong**.
 This fork is meant to be community-maintained now.
 
 Prefab lifecycle and serialization safeguards were adapted from [Mandariini's fork](https://github.com/Mandariini/guid-based-reference).
+Component-level references and the loaded-scene picker are based on [EmreDogann's stable `v1` branch](https://github.com/EmreDogann/unity-guid-reference/tree/v1).
 
 
