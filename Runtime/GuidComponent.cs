@@ -145,16 +145,36 @@ namespace UnityEngine.GUID {
     }
 
     public void SetGuid(System.Guid guid) {
-      if(this.guid == guid) return;
+      if (guid == System.Guid.Empty) {
+        Debug.LogError("Cannot assign an empty GUID.", this);
+        return;
+      }
+
+      if (this.guid == guid) {
+        serializedGuid = guid.ToByteArray();
+        return;
+      }
+
       var taken = GuidManager.ResolveGuid(guid);
-      if(taken != null)
-      {
+      if (taken != null && taken != gameObject) {
         Debug.LogError($"the guid {guid} cannot be assigned to {this.gameObject}, because it is already taken by {taken}");
         return;
       }
-      if(this.guid != System.Guid.Empty) GuidManager.Remove(this.guid);
+
+      System.Guid previousGuid = this.guid;
+      byte[] previousSerializedGuid = serializedGuid;
       this.guid = guid;
-      GuidManager.Add(this);
+      serializedGuid = guid.ToByteArray();
+
+      if (!GuidManager.Add(this)) {
+        this.guid = previousGuid;
+        serializedGuid = previousSerializedGuid;
+        return;
+      }
+
+      if (previousGuid != System.Guid.Empty) {
+        GuidManager.Remove(previousGuid);
+      }
     }
     
   }

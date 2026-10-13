@@ -75,6 +75,7 @@ public class UsesGuid : MonoBehaviour
 * Updated the package minimum to Unity 6.3 and replaced the legacy edit-mode/prefab-stage APIs with their current equivalents.
 * Improved prefab stability by excluding prefab assets, prefab stages, and preview scenes from GUID assignment, and preserving an existing GUID when Unity temporarily clears its serialized data during prefab operations.
 * Added regression coverage for prefab contents and temporarily cleared GUID data; prefab tests now use `PrefabUtility.SaveAsPrefabAsset`.
+* `SetGuid` rejects empty GUIDs, updates serialized data immediately, and preserves the existing registration when reassignment fails.
 
 ---
 

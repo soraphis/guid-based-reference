@@ -46,6 +46,55 @@ namespace UnityEngine.GUID {
         }
 
         [UnityTest]
+        public IEnumerator SetGuidUpdatesRegistrationAndSerializedData () {
+            System.Guid previousGuid = guidBase.GetGuid();
+            System.Guid assignedGuid = System.Guid.NewGuid();
+            GuidReference previousReference = new GuidReference(guidBase);
+            Assert.AreSame(guidBase.gameObject, previousReference.gameObject);
+
+            guidBase.SetGuid(assignedGuid);
+
+            FieldInfo serializedGuidField = typeof(GuidComponent).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(serializedGuidField);
+            CollectionAssert.AreEqual(assignedGuid.ToByteArray(), serializedGuidField.GetValue(guidBase));
+            Assert.IsNull(previousReference.gameObject);
+            Assert.AreSame(guidBase.gameObject, GuidManager.ResolveGuid(assignedGuid));
+            Assert.IsNull(GuidManager.ResolveGuid(previousGuid));
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator SetGuidRejectsEmptyGuidWithoutChangingState () {
+            System.Guid previousGuid = guidBase.GetGuid();
+            LogAssert.Expect(LogType.Error, "Cannot assign an empty GUID.");
+
+            guidBase.SetGuid(System.Guid.Empty);
+
+            Assert.AreEqual(previousGuid, guidBase.GetGuid());
+            Assert.AreSame(guidBase.gameObject, GuidManager.ResolveGuid(previousGuid));
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator SetGuidRejectsCollisionWithoutChangingState () {
+            GuidComponent other = CreateNewGuid();
+            System.Guid previousGuid = guidBase.GetGuid();
+            System.Guid takenGuid = other.GetGuid();
+            string expectedError = $"the guid {System.Text.RegularExpressions.Regex.Escape(takenGuid.ToString())} cannot be assigned.*because it is already taken.*";
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(expectedError));
+
+            guidBase.SetGuid(takenGuid);
+
+            Assert.AreEqual(previousGuid, guidBase.GetGuid());
+            Assert.AreSame(guidBase.gameObject, GuidManager.ResolveGuid(previousGuid));
+            Assert.AreSame(other.gameObject, GuidManager.ResolveGuid(takenGuid));
+
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator GuidDuplication () {
             LogAssert.Expect(LogType.Warning, "Guid Collision Detected while creating GuidTestGO(Clone).\nAssigning new Guid.");
 
