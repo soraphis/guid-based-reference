@@ -3,6 +3,7 @@ using UnityEngine.TestTools;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 
 namespace UnityEngine.GUID {
@@ -24,7 +25,7 @@ namespace UnityEngine.GUID {
             prefabPath = "Assets/TemporaryTestGuid.prefab";
 
             guidBase = CreateNewGuid();
-            prefab = PrefabUtility.CreatePrefab(prefabPath, guidBase.gameObject);
+            prefab = PrefabUtility.SaveAsPrefabAsset(guidBase.gameObject, prefabPath);
 
             guidPrefab = prefab.GetComponent<GuidComponent>();
         }
@@ -60,6 +61,35 @@ namespace UnityEngine.GUID {
             Assert.AreNotEqual(guidBase.GetGuid(), guidPrefab.GetGuid());
             Assert.AreEqual(guidPrefab.GetGuid(), System.Guid.Empty);
 
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator GuidPrefabContentsHaveNoGuid () {
+            GameObject prefabContents = PrefabUtility.LoadPrefabContents(prefabPath);
+
+            try {
+                GuidComponent prefabContentsGuid = prefabContents.GetComponent<GuidComponent>();
+                Assert.AreEqual(System.Guid.Empty, prefabContentsGuid.GetGuid());
+            } finally {
+                PrefabUtility.UnloadPrefabContents(prefabContents);
+            }
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator GuidSurvivesTemporarilyClearedSerializedData () {
+            System.Guid originalGuid = guidBase.GetGuid();
+            FieldInfo serializedGuidField = typeof(GuidComponent).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo onValidate = typeof(GuidComponent).GetMethod("OnValidate", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.IsNotNull(serializedGuidField);
+            Assert.IsNotNull(onValidate);
+            serializedGuidField.SetValue(guidBase, null);
+            onValidate.Invoke(guidBase, null);
+
+            Assert.AreEqual(originalGuid, guidBase.GetGuid());
             yield return null;
         }
 

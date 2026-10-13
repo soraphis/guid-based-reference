@@ -1,6 +1,8 @@
 # Guid-Based Reference (Maintained Fork)
 
 > Lightweight GUIDs for **GameObjects** so you can keep references across scenes and loads.
+>
+> Requires Unity 6.3 or newer.
 
 ## What this does
 
@@ -70,6 +72,9 @@ public class UsesGuid : MonoBehaviour
 * Used Saucy/guid-based-reference as source for package manager structure
 * Added a SetGUI method that is required for Save/Load systems ([original issue #27](https://github.com/Unity-Technologies/guid-based-reference/issues/27))
 * Simple fix for selecting multiple objects ([original issue #17](https://github.com/Unity-Technologies/guid-based-reference/issues/17))
+* Updated the package minimum to Unity 6.3 and replaced the legacy edit-mode/prefab-stage APIs with their current equivalents.
+* Improved prefab stability by excluding prefab assets, prefab stages, and preview scenes from GUID assignment, and preserving an existing GUID when Unity temporarily clears its serialized data during prefab operations.
+* Added regression coverage for prefab contents and temporarily cleared GUID data; prefab tests now use `PrefabUtility.SaveAsPrefabAsset`.
 
 ---
 
@@ -97,5 +102,7 @@ See [LICENSE.md](LICENSE.md). (Same as upstream.)
 
 Originally authored at Unity Technologies by **William Armstrong**. 
 This fork is meant to be community-maintained now.
+
+Prefab lifecycle and serialization safeguards were adapted from [Mandariini's fork](https://github.com/Mandariini/guid-based-reference).
 
 
