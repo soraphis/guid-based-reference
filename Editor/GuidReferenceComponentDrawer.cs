@@ -20,16 +20,18 @@ namespace UnityEngine.GUID {
       SerializedProperty nameProperty = property.FindPropertyRelative("cachedName");
       SerializedProperty sceneProperty = property.FindPropertyRelative("cachedScene");
       Type componentType = GetComponentType();
-      System.Guid guid = ReadGuid(guidProperty);
+      bool hasMixedReference = guidProperty.hasMultipleDifferentValues;
+      System.Guid guid = hasMixedReference ? System.Guid.Empty : ReadGuid(guidProperty);
       Component currentComponent = guid == System.Guid.Empty
         ? null
         : GuidManager.ResolveGuid(guid, componentType);
+      bool hasReference = guid != System.Guid.Empty || hasMixedReference;
 
       EditorGUI.BeginProperty(position, label, property);
 
       Rect fieldRect = position;
       fieldRect.width -= BrowseButtonWidth + ActionsButtonWidth;
-      if (guid != System.Guid.Empty) {
+      if (hasReference) {
         fieldRect.width -= ClearButtonWidth;
       }
       fieldRect.width = Mathf.Max(0f, fieldRect.width);
@@ -45,13 +47,16 @@ namespace UnityEngine.GUID {
         fieldLabel = new GUIContent($"{label.text} ({targetName}, {sceneName})");
       }
 
+      bool previousMixedValue = EditorGUI.showMixedValue;
+      EditorGUI.showMixedValue = hasMixedReference;
       Component selectedComponent = EditorGUI.ObjectField(fieldRect, fieldLabel, currentComponent, componentType, true) as Component;
+      EditorGUI.showMixedValue = previousMixedValue;
       if (selectedComponent != currentComponent) {
         AssignReference(selectedComponent, guidProperty, nameProperty, sceneProperty);
       }
 
       Rect browseRect = position;
-      browseRect.xMin = position.xMax - BrowseButtonWidth - ActionsButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
+      browseRect.xMin = position.xMax - BrowseButtonWidth - ActionsButtonWidth - (hasReference ? ClearButtonWidth : 0f);
       browseRect.width = BrowseButtonWidth;
       if (GUI.Button(browseRect, new GUIContent("Browse", "Choose a matching component from a loaded scene."), EditorStyles.miniButton)) {
         GuidReferenceComponentPicker picker = new GuidReferenceComponentPicker(componentType);
@@ -63,7 +68,7 @@ namespace UnityEngine.GUID {
       }
 
       Rect actionsRect = position;
-      actionsRect.xMin = position.xMax - ActionsButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
+      actionsRect.xMin = position.xMax - ActionsButtonWidth - (hasReference ? ClearButtonWidth : 0f);
       actionsRect.width = ActionsButtonWidth;
       GUIContent actionsContent = EditorGUIUtility.IconContent("_Popup");
       actionsContent.tooltip = "Reference actions";
@@ -85,7 +90,7 @@ namespace UnityEngine.GUID {
         }
 
         SceneAsset targetScene = sceneProperty.objectReferenceValue as SceneAsset;
-        if (targetScene != null) {
+        if (!sceneProperty.hasMultipleDifferentValues && targetScene != null) {
           menu.AddItem(new GUIContent("Open Containing Scene Additively"), false, () => {
             string scenePath = AssetDatabase.GetAssetPath(targetScene);
             EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
@@ -97,12 +102,16 @@ namespace UnityEngine.GUID {
         menu.ShowAsContext();
       }
 
-      if (guid != System.Guid.Empty) {
+      if (hasReference) {
         Rect clearRect = position;
         clearRect.xMin = position.xMax - ClearButtonWidth;
         if (GUI.Button(clearRect, "Clear", EditorStyles.miniButton)) {
           AssignReference(null, guidProperty, nameProperty, sceneProperty);
         }
+      }
+
+      if (!hasMixedReference && currentComponent != null) {
+        UpdateCachedMetadata(currentComponent, gameObjectNameProperty, nameProperty, sceneProperty);
       }
 
       EditorGUI.EndProperty();
@@ -128,7 +137,7 @@ namespace UnityEngine.GUID {
     }
 
     private static System.Guid ReadGuid (SerializedProperty property) {
-      if (property == null || property.arraySize != 16) {
+      if (property == null || property.hasMultipleDifferentValues || property.arraySize != 16) {
         return System.Guid.Empty;
       }
 
@@ -138,6 +147,23 @@ namespace UnityEngine.GUID {
       }
 
       return new System.Guid(bytes);
+    }
+
+    private static void UpdateCachedMetadata (Component component, SerializedProperty gameObjectNameProperty, SerializedProperty nameProperty, SerializedProperty sceneProperty) {
+      if (gameObjectNameProperty.stringValue != component.gameObject.name) {
+        gameObjectNameProperty.stringValue = component.gameObject.name;
+      }
+
+      string componentName = component.GetType().Name;
+      if (nameProperty.stringValue != componentName) {
+        nameProperty.stringValue = componentName;
+      }
+
+      string scenePath = component.gameObject.scene.path;
+      SceneAsset sceneAsset = AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath);
+      if (sceneProperty.objectReferenceValue != sceneAsset) {
+        sceneProperty.objectReferenceValue = sceneAsset;
+      }
     }
 
     private static void AssignReference (Component component, SerializedProperty guidProperty, SerializedProperty nameProperty, SerializedProperty sceneProperty) {

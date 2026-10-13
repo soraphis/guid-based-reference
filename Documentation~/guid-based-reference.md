@@ -18,6 +18,7 @@ Use `GuidReference<T>` to reference a specific component. `T` must derive from `
 Choose the component in the Inspector or use **Browse** to find it in any currently loaded scene, including additively loaded scenes. A `GuidComponent` is added to its GameObject if needed.
 Components of the same type on one GameObject receive separate identifiers.
 The reference menu can copy the GUID, select a loaded target in the Hierarchy, or open the containing scene additively.
+When editing multiple objects, different references are displayed as mixed; **Browse** and **Clear** apply to the whole selection.
 
 ```csharp
 using UnityEngine;
