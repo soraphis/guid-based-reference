@@ -13,6 +13,32 @@ William Armstrong williama@unity3d.com
 2. In any code that needs to be able to reference objects by GUID, add a GuidReference field.
 3. GuidReference.gameObject will then return the GameObject if it is loaded, otherwise null.
 
+### Component references
+Use `GuidReference<T>` to reference a specific component. `T` must derive from `Component`.
+Choose the component in the Inspector; a `GuidComponent` is added to its GameObject if needed.
+Components of the same type on one GameObject receive separate identifiers.
+
+```csharp
+using UnityEngine;
+using UnityEngine.GUID;
+
+public class ComponentReferenceExample : MonoBehaviour
+{
+	[SerializeField] private GuidReference<BoxCollider> targetCollider;
+
+	void UseTarget()
+	{
+		BoxCollider collider = targetCollider.Component;
+		if (collider != null)
+		{
+			collider.enabled = true;
+		}
+	}
+}
+```
+
+`targetCollider.Component` returns `null` while its scene is unloaded. Use `targetCollider.gameObject` to get the component's GameObject.
+
 ### Sample
 Look in the Samples folder for example usage. Load up the LoadFirst scene, and then use the SceneLoader object to load '
 LoadSecond'.  

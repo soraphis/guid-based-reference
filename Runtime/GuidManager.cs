@@ -11,19 +11,28 @@ namespace UnityEngine.GUID {
     // and an event to store all the callbacks that need to know when it is destroyed
     private struct GuidInfo {
       public GameObject go;
+      public Component component;
+      public bool isComponentGuid;
 
       public event Action<GameObject> OnAdd;
+      public event Action<GameObject, Component> OnComponentAdd;
       public event Action OnRemove;
 
-      public GuidInfo (GuidComponent comp) {
+      public GuidInfo (GuidComponent comp, Component targetComponent = null) {
         go = comp.gameObject;
+        component = targetComponent;
+        isComponentGuid = targetComponent != null;
         OnRemove = null;
         OnAdd = null;
+        OnComponentAdd = null;
       }
 
       public void HandleAddCallback () {
         if (OnAdd != null) {
           OnAdd(go);
+        }
+        if (OnComponentAdd != null) {
+          OnComponentAdd(go, component);
         }
       }
 
@@ -43,7 +52,15 @@ namespace UnityEngine.GUID {
         Instance = new GuidManager();
       }
 
-      return Instance.InternalAdd(guidComponent);
+      return Instance.InternalAdd(guidComponent.GetGuid(), guidComponent, null);
+    }
+
+    internal static bool Add (System.Guid guid, GuidComponent guidComponent, Component component) {
+      if (Instance == null) {
+        Instance = new GuidManager();
+      }
+
+      return Instance.InternalAdd(guid, guidComponent, component);
     }
 
     public static void Remove (System.Guid guid) {
@@ -78,6 +95,26 @@ namespace UnityEngine.GUID {
       return Instance.ResolveGuidInternal(guid, null, null);
     }
 
+    public static T ResolveGuid<T> (System.Guid guid, Action<GameObject, Component> onAddCallback, Action onRemoveCallback) where T : Component {
+      if (Instance == null) {
+        Instance = new GuidManager();
+      }
+
+      return Instance.ResolveComponentGuidInternal<T>(guid, onAddCallback, onRemoveCallback);
+    }
+
+    public static T ResolveGuid<T> (System.Guid guid) where T : Component {
+      return ResolveGuid<T>(guid, null, null);
+    }
+
+    public static Component ResolveGuid (System.Guid guid, System.Type componentType) {
+      if (Instance == null) {
+        Instance = new GuidManager();
+      }
+
+      return Instance.ResolveComponentGuidInternal(guid, componentType);
+    }
+
     // instance data
     private Dictionary<System.Guid, GuidInfo> guidToObjectMap;
 
@@ -85,10 +122,8 @@ namespace UnityEngine.GUID {
       guidToObjectMap = new Dictionary<System.Guid, GuidInfo>();
     }
 
-    private bool InternalAdd (GuidComponent guidComponent) {
-      Guid guid = guidComponent.GetGuid();
-
-      GuidInfo info = new GuidInfo(guidComponent);
+    private bool InternalAdd (System.Guid guid, GuidComponent guidComponent, Component component) {
+      GuidInfo info = new GuidInfo(guidComponent, component);
 
       if (!guidToObjectMap.ContainsKey(guid)) {
         guidToObjectMap.Add(guid, info);
@@ -96,7 +131,7 @@ namespace UnityEngine.GUID {
       }
 
       GuidInfo existingInfo = guidToObjectMap[guid];
-      if (existingInfo.go != null && existingInfo.go != guidComponent.gameObject) {
+      if (existingInfo.go != null && (existingInfo.go != guidComponent.gameObject || existingInfo.component != component)) {
         // normally, a duplicate GUID is a big problem, means you won't necessarily be referencing what you expect
         if (Application.isPlaying) {
           Debug.AssertFormat(false, guidComponent, "Guid Collision Detected between {0} and {1}.\nAssigning new Guid. Consider tracking runtime instances using a direct reference or other method.", (guidToObjectMap[guid].go != null ? guidToObjectMap[guid].go.name : "NULL"), (guidComponent != null ? guidComponent.name : "NULL"));
@@ -111,6 +146,8 @@ namespace UnityEngine.GUID {
 
       // if we already tried to find this GUID, but haven't set the game object to anything specific, copy any OnAdd callbacks then call them
       existingInfo.go = info.go;
+      existingInfo.component = info.component;
+      existingInfo.isComponentGuid = info.isComponentGuid;
       existingInfo.HandleAddCallback();
       guidToObjectMap[guid] = existingInfo;
       return true;
@@ -119,11 +156,9 @@ namespace UnityEngine.GUID {
     private void InternalRemove (System.Guid guid) {
       GuidInfo info;
       if (guidToObjectMap.TryGetValue(guid, out info)) {
-        // trigger all the destroy delegates that have registered
+        guidToObjectMap.Remove(guid);
         info.HandleRemoveCallback();
       }
-
-      guidToObjectMap.Remove(guid);
     }
 
     // nice easy api to find a GUID, and if it works, register an on destroy callback
@@ -154,6 +189,64 @@ namespace UnityEngine.GUID {
 
       guidToObjectMap.Add(guid, info);
 
+      return null;
+    }
+
+    private T ResolveComponentGuidInternal<T> (System.Guid guid, Action<GameObject, Component> onAddCallback, Action onRemoveCallback) where T : Component {
+      if (guid == System.Guid.Empty) {
+        return null;
+      }
+
+      GuidInfo info;
+      if (guidToObjectMap.TryGetValue(guid, out info)) {
+        if (info.isComponentGuid && info.component == null) {
+          InternalRemove(guid);
+          return ResolveComponentGuidInternal<T>(guid, onAddCallback, onRemoveCallback);
+        }
+
+        if (onAddCallback != null) {
+          info.OnComponentAdd += onAddCallback;
+        }
+
+        if (onRemoveCallback != null) {
+          info.OnRemove += onRemoveCallback;
+        }
+
+        guidToObjectMap[guid] = info;
+        return info.component as T;
+      }
+
+      if (onAddCallback != null) {
+        info.OnComponentAdd += onAddCallback;
+      }
+
+      if (onRemoveCallback != null) {
+        info.OnRemove += onRemoveCallback;
+      }
+
+      guidToObjectMap.Add(guid, info);
+      return null;
+    }
+
+    private Component ResolveComponentGuidInternal (System.Guid guid, System.Type componentType) {
+      if (guid == System.Guid.Empty) {
+        return null;
+      }
+
+      GuidInfo info;
+      if (guidToObjectMap.TryGetValue(guid, out info)) {
+        if (info.isComponentGuid && info.component == null) {
+          InternalRemove(guid);
+          info = default(GuidInfo);
+        } else {
+          guidToObjectMap[guid] = info;
+          return info.component != null && componentType.IsAssignableFrom(info.component.GetType())
+            ? info.component
+            : null;
+        }
+      }
+
+      guidToObjectMap.Add(guid, info);
       return null;
     }
   }

@@ -89,4 +89,122 @@ namespace UnityEngine.GUID {
       removeDelegate = GuidRemoved;
     }
   }
+
+  [System.Serializable]
+  public class GuidReference<T> : ISerializationCallbackReceiver where T : Component {
+    private T cachedComponent;
+    private GameObject cachedGameObject;
+    private bool isCacheSet;
+    private bool hasCachedComponent;
+
+    [SerializeField]
+    private byte[] serializedGuid;
+
+    private System.Guid guid;
+
+#if UNITY_EDITOR
+    [SerializeField]
+    private string cachedName;
+
+    [SerializeField]
+    private SceneAsset cachedScene;
+#endif
+
+    public event Action<T> OnGuidAdded = delegate (T component) { };
+    public event Action OnGuidRemoved = delegate () { };
+
+    private Action<GameObject, Component> addDelegate;
+    private Action removeDelegate;
+
+    public GameObject gameObject {
+      get {
+        Resolve();
+        return cachedGameObject;
+      }
+    }
+
+    public T Component {
+      get {
+        Resolve();
+        return cachedComponent;
+      }
+    }
+
+    public GuidReference () {
+      InitializeDelegates();
+    }
+
+    public GuidReference (T targetComponent) {
+      if (targetComponent != null) {
+        GuidComponent owner = targetComponent.GetComponent<GuidComponent>();
+        if (owner == null) {
+          Debug.LogError("A GuidComponent is required to reference this component.", targetComponent);
+        } else {
+          guid = owner.GetGuid(targetComponent);
+        }
+      }
+
+      InitializeDelegates();
+    }
+
+    private void Resolve () {
+      if (isCacheSet) {
+        if (!hasCachedComponent || cachedComponent != null) {
+          return;
+        }
+
+        isCacheSet = false;
+        hasCachedComponent = false;
+      }
+
+      cachedComponent = GuidManager.ResolveGuid<T>(guid, addDelegate, removeDelegate);
+      cachedGameObject = cachedComponent != null ? cachedComponent.gameObject : null;
+      isCacheSet = true;
+      hasCachedComponent = cachedComponent != null;
+    }
+
+    private void GuidAdded (GameObject go, Component targetComponent) {
+      cachedComponent = targetComponent as T;
+      cachedGameObject = cachedComponent != null ? go : null;
+      isCacheSet = true;
+      hasCachedComponent = cachedComponent != null;
+      if (cachedComponent != null) {
+        OnGuidAdded(cachedComponent);
+      }
+    }
+
+    private void GuidRemoved () {
+      cachedComponent = null;
+      cachedGameObject = null;
+      isCacheSet = true;
+      hasCachedComponent = false;
+      try {
+        OnGuidRemoved();
+      } finally {
+        isCacheSet = false;
+      }
+    }
+
+    private void InitializeDelegates () {
+      addDelegate = GuidAdded;
+      removeDelegate = GuidRemoved;
+    }
+
+    public void OnBeforeSerialize () {
+      serializedGuid = guid.ToByteArray();
+    }
+
+    public void OnAfterDeserialize () {
+      cachedComponent = null;
+      cachedGameObject = null;
+      isCacheSet = false;
+      hasCachedComponent = false;
+      if (serializedGuid == null || serializedGuid.Length != 16) {
+        serializedGuid = new byte[16];
+      }
+
+      guid = new System.Guid(serializedGuid);
+      InitializeDelegates();
+    }
+  }
 }

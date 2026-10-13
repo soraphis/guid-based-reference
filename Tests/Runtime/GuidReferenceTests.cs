@@ -160,6 +160,62 @@ namespace UnityEngine.GUID {
         }
 
         [UnityTest]
+        public IEnumerator ComponentGuidReferenceDistinguishesSameTypeComponents () {
+            GameObject target = new GameObject("ComponentGuidTarget");
+
+            try {
+                GuidComponent owner = target.AddComponent<GuidComponent>();
+                BoxCollider first = target.AddComponent<BoxCollider>();
+                BoxCollider second = target.AddComponent<BoxCollider>();
+                System.Guid firstComponentGuid = owner.GetGuid(first);
+                GuidReference<BoxCollider> firstReference = new GuidReference<BoxCollider>(first);
+                GuidReference<BoxCollider> secondReference = new GuidReference<BoxCollider>(second);
+
+                Assert.AreNotEqual(firstReference.Component.GetInstanceID(), secondReference.Component.GetInstanceID());
+                Assert.AreSame(first, firstReference.Component);
+                Assert.AreSame(second, secondReference.Component);
+                Assert.AreSame(target, firstReference.gameObject);
+
+                firstReference.OnBeforeSerialize();
+                FieldInfo serializedGuidField = typeof(GuidReference<BoxCollider>).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.IsNotNull(serializedGuidField);
+                GuidReference<BoxCollider> restoredReference = new GuidReference<BoxCollider>();
+                serializedGuidField.SetValue(restoredReference, ((byte[])serializedGuidField.GetValue(firstReference)).Clone());
+                restoredReference.OnAfterDeserialize();
+                Assert.AreSame(first, restoredReference.Component);
+
+                owner.OnBeforeSerialize();
+                owner.OnAfterDeserialize();
+                Assert.AreEqual(firstComponentGuid, owner.GetGuid(first));
+            } finally {
+                Object.DestroyImmediate(target);
+            }
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ComponentGuidReferenceNotifiesWhenComponentIsDestroyed () {
+            GameObject target = new GameObject("DestroyedComponentTarget");
+            target.AddComponent<GuidComponent>();
+            BoxCollider collider = target.AddComponent<BoxCollider>();
+            GuidReference<BoxCollider> reference = new GuidReference<BoxCollider>(collider);
+            int removedCount = 0;
+            reference.OnGuidRemoved += () => {
+                removedCount++;
+                Assert.IsNull(reference.Component);
+            };
+
+            Object.DestroyImmediate(collider);
+
+            Assert.IsNull(reference.Component);
+            Assert.AreEqual(1, removedCount);
+            Object.DestroyImmediate(target);
+
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator GuidInvalidReference () {
             GuidComponent newGuid = CreateNewGuid();
             GuidReference reference = new GuidReference(newGuid);

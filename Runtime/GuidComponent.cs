@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -17,6 +18,9 @@ namespace UnityEngine.GUID {
     // Fun fact, we tried using strings at first, but that allocated memory and was twice as slow
     [SerializeField]
     private byte[] serializedGuid;
+
+    [SerializeField, HideInInspector]
+    private List<ComponentGuid> componentGuids = new List<ComponentGuid>();
 
     public bool IsGuidAssigned () {
       return guid != System.Guid.Empty;
@@ -82,33 +86,55 @@ namespace UnityEngine.GUID {
 
     // We cannot allow a GUID to be saved into a prefab, and we need to convert to byte[]
     public void OnBeforeSerialize () {
+      if (componentGuids == null) {
+        componentGuids = new List<ComponentGuid>();
+      }
+
 #if UNITY_EDITOR
       // This lets us detect if we are a prefab instance or a prefab asset.
       // A prefab asset cannot contain a GUID since it would then be duplicated when instanced.
       if (IsAssetOnDisk()) {
         serializedGuid = null;
         guid = System.Guid.Empty;
+        foreach (ComponentGuid entry in componentGuids) {
+          entry.SetGuid(System.Guid.Empty);
+        }
       } else
 #endif
       {
         if (guid != System.Guid.Empty) {
           serializedGuid = guid.ToByteArray();
         }
+        foreach (ComponentGuid entry in componentGuids) {
+          entry.OnBeforeSerialize();
+        }
       }
     }
 
     // On load, we can go head a restore our system guid for later use
     public void OnAfterDeserialize () {
+      if (componentGuids == null) {
+        componentGuids = new List<ComponentGuid>();
+      }
+
       if (serializedGuid != null && serializedGuid.Length == 16) {
         guid = new System.Guid(serializedGuid);
+      }
+      foreach (ComponentGuid entry in componentGuids) {
+        entry.OnAfterDeserialize();
       }
     }
 
     void Awake () {
       CreateGuid();
+      RegisterComponentGuids();
     }
 
     void OnValidate () {
+      if (componentGuids == null) {
+        componentGuids = new List<ComponentGuid>();
+      }
+
 #if UNITY_EDITOR
       // similar to on Serialize, but gets called on Copying a Component or Applying a Prefab
       // at a time that lets us detect what we are
@@ -118,10 +144,17 @@ namespace UnityEngine.GUID {
         }
         serializedGuid = null;
         guid = System.Guid.Empty;
+        foreach (ComponentGuid entry in componentGuids) {
+          if (entry.Guid != System.Guid.Empty) {
+            GuidManager.Remove(entry.Guid);
+          }
+          entry.SetGuid(System.Guid.Empty);
+        }
       } else
 #endif
       {
         CreateGuid();
+        RegisterComponentGuids();
       }
     }
 
@@ -134,6 +167,86 @@ namespace UnityEngine.GUID {
       return guid;
     }
 
+    public System.Guid GetGuid (Component targetComponent) {
+      if (targetComponent == null || targetComponent.gameObject != gameObject) {
+        return System.Guid.Empty;
+      }
+
+#if UNITY_EDITOR
+      if (IsAssetOnDisk()) {
+        return System.Guid.Empty;
+      }
+#endif
+
+      if (GetGuid() == System.Guid.Empty) {
+        CreateGuid();
+      }
+
+      ComponentGuid componentGuid = componentGuids.Find(entry => entry.Component == targetComponent);
+      if (componentGuid == null) {
+#if UNITY_EDITOR
+        Undo.RecordObject(this, "Added Component GUID");
+#endif
+        componentGuid = new ComponentGuid(targetComponent);
+        componentGuids.Add(componentGuid);
+      }
+
+      RegisterComponentGuid(componentGuid);
+      return componentGuid.Guid;
+    }
+
+    public Component GetComponentFromGuid (System.Guid componentGuid) {
+      ComponentGuid entry = componentGuids.Find(candidate => candidate.Guid == componentGuid);
+      return entry != null ? entry.Component : null;
+    }
+
+    private void RegisterComponentGuids () {
+      if (componentGuids == null) {
+        componentGuids = new List<ComponentGuid>();
+      }
+
+#if UNITY_EDITOR
+      if (IsAssetOnDisk()) {
+        return;
+      }
+#endif
+
+      for (int i = componentGuids.Count - 1; i >= 0; i--) {
+        ComponentGuid entry = componentGuids[i];
+        if (entry.Component == null) {
+          if (entry.Guid != System.Guid.Empty) {
+            GuidManager.Remove(entry.Guid);
+          }
+          componentGuids.RemoveAt(i);
+        } else {
+          RegisterComponentGuid(entry);
+        }
+      }
+    }
+
+    private void RegisterComponentGuid (ComponentGuid entry) {
+      Component targetComponent = entry.Component;
+      if (targetComponent == null || entry.IsRegisteredFor(targetComponent)) {
+        return;
+      }
+
+      if (entry.Guid == System.Guid.Empty) {
+#if UNITY_EDITOR
+        Undo.RecordObject(this, "Added Component GUID");
+#endif
+        entry.SetGuid(System.Guid.NewGuid());
+      }
+
+      while (!GuidManager.Add(entry.Guid, this, targetComponent)) {
+        entry.SetGuid(System.Guid.NewGuid());
+      }
+
+      entry.MarkRegistered(targetComponent);
+#if UNITY_EDITOR
+      EditorUtility.SetDirty(this);
+#endif
+    }
+
     public GuidReference ToReference()
     {
       return new GuidReference(this);
@@ -142,6 +255,14 @@ namespace UnityEngine.GUID {
     // let the manager know we are gone, so other objects no longer find this
     public void OnDestroy () {
       GuidManager.Remove(guid);
+      if (componentGuids == null) {
+        return;
+      }
+      foreach (ComponentGuid entry in componentGuids) {
+        if (entry.Guid != System.Guid.Empty) {
+          GuidManager.Remove(entry.Guid);
+        }
+      }
     }
 
     public void SetGuid(System.Guid guid) {
@@ -176,6 +297,66 @@ namespace UnityEngine.GUID {
         GuidManager.Remove(previousGuid);
       }
     }
-    
+
+  }
+
+  [System.Serializable]
+  public class ComponentGuid {
+    [SerializeField]
+    private Component component;
+
+    [SerializeField]
+    private byte[] serializedGuid;
+
+    [System.NonSerialized]
+    private System.Guid guid;
+
+    [System.NonSerialized]
+    private Component registeredComponent;
+
+    [System.NonSerialized]
+    private bool isRegistered;
+
+    public Component Component {
+      get { return component; }
+    }
+
+    public System.Guid Guid {
+      get { return guid; }
+    }
+
+    public ComponentGuid () { }
+
+    internal ComponentGuid (Component component) {
+      this.component = component;
+    }
+
+    internal void SetGuid (System.Guid value) {
+      guid = value;
+      serializedGuid = value == System.Guid.Empty ? null : value.ToByteArray();
+      isRegistered = false;
+      registeredComponent = null;
+    }
+
+    internal void OnBeforeSerialize () {
+      serializedGuid = guid == System.Guid.Empty ? null : guid.ToByteArray();
+    }
+
+    internal void OnAfterDeserialize () {
+      guid = serializedGuid != null && serializedGuid.Length == 16
+        ? new System.Guid(serializedGuid)
+        : System.Guid.Empty;
+      isRegistered = false;
+      registeredComponent = null;
+    }
+
+    internal bool IsRegisteredFor (Component targetComponent) {
+      return isRegistered && registeredComponent == targetComponent;
+    }
+
+    internal void MarkRegistered (Component targetComponent) {
+      registeredComponent = targetComponent;
+      isRegistered = true;
+    }
   }
 }
