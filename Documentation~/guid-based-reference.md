@@ -38,6 +38,7 @@ public class ComponentReferenceExample : MonoBehaviour
 ```
 
 `targetCollider.Component` returns `null` while its scene is unloaded. Use `targetCollider.gameObject` to get the component's GameObject.
+Undoing component removal restores its previous component GUID and references. Permanently removed component GUIDs remain listed as orphaned in the `GuidComponent` Inspector until explicitly forgotten.
 
 ### Sample
 Look in the Samples folder for example usage. Load up the LoadFirst scene, and then use the SceneLoader object to load '

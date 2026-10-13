@@ -195,9 +195,35 @@ namespace UnityEngine.GUID {
       return componentGuid.Guid;
     }
 
+    public IReadOnlyList<ComponentGuid> GetComponentGuids () {
+      if (componentGuids == null) {
+        componentGuids = new List<ComponentGuid>();
+      }
+
+      return componentGuids;
+    }
+
+    public bool ForgetOrphanedComponentGuid (ComponentGuid orphan) {
+      if (orphan == null || orphan.Component != null || componentGuids == null || !componentGuids.Contains(orphan)) {
+        return false;
+      }
+
+#if UNITY_EDITOR
+      Undo.RecordObject(this, "Forget Orphaned Component GUID");
+#endif
+      if (orphan.Guid != System.Guid.Empty) {
+        GuidManager.Remove(orphan.Guid);
+      }
+      componentGuids.Remove(orphan);
+#if UNITY_EDITOR
+      EditorUtility.SetDirty(this);
+#endif
+      return true;
+    }
+
     public Component GetComponentFromGuid (System.Guid componentGuid) {
       ComponentGuid entry = componentGuids.Find(candidate => candidate.Guid == componentGuid);
-      return entry != null ? entry.Component : null;
+      return entry != null && entry.Component != null ? entry.Component : null;
     }
 
     private void RegisterComponentGuids () {
@@ -214,10 +240,10 @@ namespace UnityEngine.GUID {
       for (int i = componentGuids.Count - 1; i >= 0; i--) {
         ComponentGuid entry = componentGuids[i];
         if (entry.Component == null) {
-          if (entry.Guid != System.Guid.Empty) {
+          if (entry.IsRegistered) {
             GuidManager.Remove(entry.Guid);
           }
-          componentGuids.RemoveAt(i);
+          entry.ClearRegistered();
         } else {
           RegisterComponentGuid(entry);
         }
@@ -306,6 +332,9 @@ namespace UnityEngine.GUID {
     private Component component;
 
     [SerializeField]
+    private string componentTypeName;
+
+    [SerializeField]
     private byte[] serializedGuid;
 
     [System.NonSerialized]
@@ -321,6 +350,10 @@ namespace UnityEngine.GUID {
       get { return component; }
     }
 
+    public string ComponentTypeName {
+      get { return component != null ? component.GetType().Name : componentTypeName; }
+    }
+
     public System.Guid Guid {
       get { return guid; }
     }
@@ -329,6 +362,7 @@ namespace UnityEngine.GUID {
 
     internal ComponentGuid (Component component) {
       this.component = component;
+      componentTypeName = component != null ? component.GetType().Name : string.Empty;
     }
 
     internal void SetGuid (System.Guid value) {
@@ -343,15 +377,26 @@ namespace UnityEngine.GUID {
     }
 
     internal void OnAfterDeserialize () {
-      guid = serializedGuid != null && serializedGuid.Length == 16
-        ? new System.Guid(serializedGuid)
-        : System.Guid.Empty;
+      if (serializedGuid != null && serializedGuid.Length == 16) {
+        guid = new System.Guid(serializedGuid);
+      } else if (guid != System.Guid.Empty) {
+        serializedGuid = guid.ToByteArray();
+      }
       isRegistered = false;
       registeredComponent = null;
     }
 
     internal bool IsRegisteredFor (Component targetComponent) {
       return isRegistered && registeredComponent == targetComponent;
+    }
+
+    internal bool IsRegistered {
+      get { return isRegistered; }
+    }
+
+    internal void ClearRegistered () {
+      registeredComponent = null;
+      isRegistered = false;
     }
 
     internal void MarkRegistered (Component targetComponent) {

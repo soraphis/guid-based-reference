@@ -131,6 +131,15 @@ namespace UnityEngine.GUID {
       }
 
       GuidInfo existingInfo = guidToObjectMap[guid];
+      if (existingInfo.isComponentGuid && existingInfo.component == null) {
+        existingInfo.go = info.go;
+        existingInfo.component = info.component;
+        existingInfo.isComponentGuid = info.isComponentGuid;
+        existingInfo.HandleAddCallback();
+        guidToObjectMap[guid] = existingInfo;
+        return true;
+      }
+
       if (existingInfo.go != null && (existingInfo.go != guidComponent.gameObject || existingInfo.component != component)) {
         // normally, a duplicate GUID is a big problem, means you won't necessarily be referencing what you expect
         if (Application.isPlaying) {

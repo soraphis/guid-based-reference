@@ -195,6 +195,101 @@ namespace UnityEngine.GUID {
         }
 
         [UnityTest]
+        public IEnumerator ComponentGuidSurvivesTemporarilyClearedSerializedData () {
+            GameObject target = new GameObject("ComponentGuidSerializationTarget");
+
+            try {
+                GuidComponent owner = target.AddComponent<GuidComponent>();
+                BoxCollider collider = target.AddComponent<BoxCollider>();
+                System.Guid originalGuid = owner.GetGuid(collider);
+
+                FieldInfo entriesField = typeof(GuidComponent).GetField("componentGuids", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo serializedGuidField = typeof(ComponentGuid).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo onAfterDeserialize = typeof(ComponentGuid).GetMethod("OnAfterDeserialize", BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.IsNotNull(entriesField);
+                Assert.IsNotNull(serializedGuidField);
+                Assert.IsNotNull(onAfterDeserialize);
+
+                List<ComponentGuid> entries = (List<ComponentGuid>)entriesField.GetValue(owner);
+                ComponentGuid componentGuid = entries[0];
+                serializedGuidField.SetValue(componentGuid, null);
+                onAfterDeserialize.Invoke(componentGuid, null);
+
+                Assert.AreEqual(originalGuid, componentGuid.Guid);
+                CollectionAssert.AreEqual(originalGuid.ToByteArray(), serializedGuidField.GetValue(componentGuid));
+                Assert.AreEqual(originalGuid, owner.GetGuid(collider));
+            } finally {
+                Object.DestroyImmediate(target);
+            }
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ComponentGuidUndoRestoresIdentityAndRedoRemovesIt () {
+            GameObject target = new GameObject("ComponentGuidUndoTarget");
+            GuidComponent owner = target.AddComponent<GuidComponent>();
+            BoxCollider collider = target.AddComponent<BoxCollider>();
+            System.Guid originalGuid = owner.GetGuid(collider);
+            GuidReference<BoxCollider> reference = new GuidReference<BoxCollider>(collider);
+
+            try {
+                Undo.DestroyObjectImmediate(collider);
+                Assert.IsNull(reference.Component);
+
+                Undo.PerformUndo();
+                yield return null;
+
+                BoxCollider restored = target.GetComponent<BoxCollider>();
+                Assert.IsNotNull(restored);
+                Assert.AreEqual(originalGuid, owner.GetGuid(restored));
+                Assert.AreSame(restored, reference.Component);
+
+                Undo.PerformRedo();
+                Assert.IsNull(reference.Component);
+            } finally {
+                Undo.ClearAll();
+                Object.DestroyImmediate(target);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RecreatedComponentReceivesNewGuid () {
+            GameObject target = new GameObject("RecreatedComponentTarget");
+
+            try {
+                GuidComponent owner = target.AddComponent<GuidComponent>();
+                BoxCollider original = target.AddComponent<BoxCollider>();
+                System.Guid originalGuid = owner.GetGuid(original);
+
+                Object.DestroyImmediate(original);
+                BoxCollider replacement = target.AddComponent<BoxCollider>();
+                System.Guid replacementGuid = owner.GetGuid(replacement);
+
+                Assert.AreNotEqual(originalGuid, replacementGuid);
+                Assert.AreSame(replacement, owner.GetComponentFromGuid(replacementGuid));
+                Assert.IsNull(owner.GetComponentFromGuid(originalGuid));
+
+                ComponentGuid orphan = null;
+                foreach (ComponentGuid entry in owner.GetComponentGuids()) {
+                    if (entry.Guid == originalGuid) {
+                        orphan = entry;
+                        break;
+                    }
+                }
+
+                Assert.IsNotNull(orphan);
+                Assert.IsTrue(owner.ForgetOrphanedComponentGuid(orphan));
+                Assert.IsFalse(owner.GetComponentGuids().Contains(orphan));
+            } finally {
+                Object.DestroyImmediate(target);
+            }
+
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator ComponentGuidReferenceNotifiesWhenComponentIsDestroyed () {
             GameObject target = new GameObject("DestroyedComponentTarget");
             target.AddComponent<GuidComponent>();

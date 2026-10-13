@@ -42,6 +42,38 @@ namespace UnityEngine.GUID
             row.Add(guidField);
 
             root.Add(row);
+
+            var componentGuids = guidComp.GetComponentGuids();
+            if (componentGuids.Count > 0)
+            {
+                var componentGuidFoldout = new Foldout { text = "Component GUIDs" };
+                foreach (ComponentGuid componentGuid in componentGuids)
+                {
+                    var componentRow = new VisualElement();
+                    componentRow.style.flexDirection = FlexDirection.Row;
+                    string componentName = componentGuid.ComponentTypeName;
+                    componentRow.Add(new Label(componentGuid.Component == null
+                        ? $"{componentName} (orphaned)"
+                        : componentName));
+                    componentRow.Add(new Label(componentGuid.Guid.ToString()));
+
+                    if (componentGuid.Component == null)
+                    {
+                        var forgetButton = new Button(() =>
+                        {
+                            if (guidComp.ForgetOrphanedComponentGuid(componentGuid))
+                            {
+                                componentRow.RemoveFromHierarchy();
+                            }
+                        }) { text = "Forget" };
+                        componentRow.Add(forgetButton);
+                    }
+
+                    componentGuidFoldout.Add(componentRow);
+                }
+                root.Add(componentGuidFoldout);
+            }
+
             return root;
         }
 
