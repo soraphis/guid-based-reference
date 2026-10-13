@@ -25,6 +25,7 @@ namespace UnityEngine.GUID {
             prefabPath = "Assets/TemporaryTestGuid.prefab";
 
             guidBase = CreateNewGuid();
+            guidBase.gameObject.AddComponent<BoxCollider>();
             prefab = PrefabUtility.SaveAsPrefabAsset(guidBase.gameObject, prefabPath);
 
             guidPrefab = prefab.GetComponent<GuidComponent>();
@@ -143,10 +144,98 @@ namespace UnityEngine.GUID {
         }
 
         [UnityTest]
+        public IEnumerator GlobalObjectIdMappingRestoresRootAndComponentGuids () {
+            UnityEditor.GlobalObjectId globalObjectId = UnityEditor.GlobalObjectId.GetGlobalObjectIdSlow(guidBase);
+            if (globalObjectId.identifierType != 2) {
+                Assert.Ignore("The test object needs a saved scene GlobalObjectId.");
+            }
+
+            BoxCollider collider = guidBase.gameObject.AddComponent<BoxCollider>();
+            System.Guid rootGuid = guidBase.GetGuid();
+            System.Guid componentGuid = guidBase.GetGuid(collider);
+            guidBase.SetGuid(rootGuid);
+
+            FieldInfo rootGuidField = typeof(GuidComponent).GetField("guid", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo serializedGuidField = typeof(GuidComponent).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo componentGuidsField = typeof(GuidComponent).GetField("componentGuids", BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo onValidate = typeof(GuidComponent).GetMethod("OnValidate", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.IsNotNull(rootGuidField);
+            Assert.IsNotNull(serializedGuidField);
+            Assert.IsNotNull(componentGuidsField);
+            Assert.IsNotNull(onValidate);
+
+            List<ComponentGuid> entries = (List<ComponentGuid>)componentGuidsField.GetValue(guidBase);
+            ComponentGuid componentEntry = entries.Find(entry => entry.Component == collider);
+            FieldInfo componentGuidField = typeof(ComponentGuid).GetField("guid", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo componentSerializedGuidField = typeof(ComponentGuid).GetField("serializedGuid", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo componentRegisteredField = typeof(ComponentGuid).GetField("isRegistered", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo registeredComponentField = typeof(ComponentGuid).GetField("registeredComponent", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.IsNotNull(componentEntry);
+            Assert.IsNotNull(componentGuidField);
+            Assert.IsNotNull(componentSerializedGuidField);
+            Assert.IsNotNull(componentRegisteredField);
+            Assert.IsNotNull(registeredComponentField);
+
+            rootGuidField.SetValue(guidBase, System.Guid.Empty);
+            serializedGuidField.SetValue(guidBase, null);
+            componentGuidField.SetValue(componentEntry, System.Guid.Empty);
+            componentSerializedGuidField.SetValue(componentEntry, null);
+            componentRegisteredField.SetValue(componentEntry, false);
+            registeredComponentField.SetValue(componentEntry, null);
+            onValidate.Invoke(guidBase, null);
+
+            Assert.AreEqual(rootGuid, guidBase.GetGuid());
+            Assert.AreEqual(componentGuid, guidBase.GetGuid(collider));
+
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator GuidPrefabInstance () {
             GuidComponent instance = GameObject.Instantiate<GuidComponent>(guidPrefab);
             Assert.AreNotEqual(guidBase.GetGuid(), instance.GetGuid());
             Assert.AreNotEqual(instance.GetGuid(), guidPrefab.GetGuid());
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PrefabApplyAndRevertPreserveInstanceGuids () {
+            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            GuidComponent instanceGuid = instance.GetComponent<GuidComponent>();
+            BoxCollider instanceCollider = instance.GetComponent<BoxCollider>();
+            System.Guid rootGuid = instanceGuid.GetGuid();
+            System.Guid componentGuid = instanceGuid.GetGuid(instanceCollider);
+
+            try {
+                instance.transform.localPosition = new Vector3(2f, 3f, 4f);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(instance.transform);
+                PrefabUtility.ApplyPrefabInstance(instance, InteractionMode.AutomatedAction);
+
+                Assert.AreEqual(rootGuid, instanceGuid.GetGuid());
+                Assert.AreEqual(componentGuid, instanceGuid.GetGuid(instanceCollider));
+
+                instance.transform.localPosition = new Vector3(-2f, -3f, -4f);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(instance.transform);
+                PrefabUtility.RevertPrefabInstance(instance, InteractionMode.AutomatedAction);
+
+                Assert.AreEqual(rootGuid, instanceGuid.GetGuid());
+                Assert.AreEqual(componentGuid, instanceGuid.GetGuid(instanceCollider));
+
+                GameObject prefabContents = PrefabUtility.LoadPrefabContents(prefabPath);
+                try {
+                    GuidComponent prefabContentsGuid = prefabContents.GetComponent<GuidComponent>();
+                    BoxCollider prefabContentsCollider = prefabContents.GetComponent<BoxCollider>();
+                    Assert.AreEqual(System.Guid.Empty, prefabContentsGuid.GetGuid());
+                    Assert.AreEqual(System.Guid.Empty, prefabContentsGuid.GetGuid(prefabContentsCollider));
+                } finally {
+                    PrefabUtility.UnloadPrefabContents(prefabContents);
+                }
+            } finally {
+                Object.DestroyImmediate(instance);
+            }
 
             yield return null;
         }

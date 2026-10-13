@@ -29,31 +29,38 @@ namespace UnityEngine.GUID {
     // When de-serializing or creating this component, we want to either restore our serialized GUID
     // or create a new one.
     void CreateGuid () {
+#if UNITY_EDITOR
+      if (IsAssetOnDisk()) {
+        return;
+      }
+#endif
       // if our serialized data is invalid, then we are a new object and need a new GUID
       if (serializedGuid == null || serializedGuid.Length != 16) {
-#if UNITY_EDITOR
-        // if in editor, make sure we aren't a prefab of some kind
-        if (IsAssetOnDisk()) {
-          return;
-        }
-#endif
         // Keep the current identity if Unity temporarily clears serialized data during prefab operations.
         if (guid != System.Guid.Empty) {
           serializedGuid = guid.ToByteArray();
         } else {
 #if UNITY_EDITOR
-          Undo.RecordObject(this, "Added GUID");
+          if (GuidEditorMapping.TryRestore(this, out System.Guid restoredGuid)) {
+            guid = restoredGuid;
+            serializedGuid = guid.ToByteArray();
+          } else
 #endif
-          guid = System.Guid.NewGuid();
-          serializedGuid = guid.ToByteArray();
+          {
+#if UNITY_EDITOR
+            Undo.RecordObject(this, "Added GUID");
+#endif
+            guid = System.Guid.NewGuid();
+            serializedGuid = guid.ToByteArray();
 
 #if UNITY_EDITOR
-          // If we are creating a new GUID for a prefab instance of a prefab, but we have somehow lost our prefab connection
-          // force a save of the modified prefab instance properties
-          if (PrefabUtility.IsPartOfNonAssetPrefabInstance(this)) {
-            PrefabUtility.RecordPrefabInstancePropertyModifications(this);
-          }
+            // If we are creating a new GUID for a prefab instance of a prefab, but we have somehow lost our prefab connection
+            // force a save of the modified prefab instance properties
+            if (PrefabUtility.IsPartOfNonAssetPrefabInstance(this)) {
+              PrefabUtility.RecordPrefabInstancePropertyModifications(this);
+            }
 #endif
+          }
         }
       } else if (guid == System.Guid.Empty) {
         // otherwise, we should set our system guid to our serialized guid
@@ -67,6 +74,10 @@ namespace UnityEngine.GUID {
           serializedGuid = null;
           guid = System.Guid.Empty;
           CreateGuid();
+        } else {
+#if UNITY_EDITOR
+          GuidEditorMapping.Remember(this, guid);
+#endif
         }
       }
     }
@@ -160,6 +171,11 @@ namespace UnityEngine.GUID {
 
     // Never return an invalid GUID
     public System.Guid GetGuid () {
+#if UNITY_EDITOR
+      if (IsAssetOnDisk()) {
+        return System.Guid.Empty;
+      }
+#endif
       if (guid == System.Guid.Empty && serializedGuid != null && serializedGuid.Length == 16) {
         guid = new System.Guid(serializedGuid);
       }
@@ -252,15 +268,30 @@ namespace UnityEngine.GUID {
 
     private void RegisterComponentGuid (ComponentGuid entry) {
       Component targetComponent = entry.Component;
-      if (targetComponent == null || entry.IsRegisteredFor(targetComponent)) {
+      if (targetComponent == null) {
+        return;
+      }
+
+#if UNITY_EDITOR
+      if (entry.Guid != System.Guid.Empty) {
+        GuidEditorMapping.Remember(targetComponent, entry.Guid);
+      }
+#endif
+      if (entry.IsRegisteredFor(targetComponent)) {
         return;
       }
 
       if (entry.Guid == System.Guid.Empty) {
 #if UNITY_EDITOR
-        Undo.RecordObject(this, "Added Component GUID");
-#endif
+        if (GuidEditorMapping.TryRestore(targetComponent, out System.Guid restoredGuid)) {
+          entry.SetGuid(restoredGuid);
+        } else {
+          Undo.RecordObject(this, "Added Component GUID");
+          entry.SetGuid(System.Guid.NewGuid());
+        }
+#else
         entry.SetGuid(System.Guid.NewGuid());
+#endif
       }
 
       while (!GuidManager.Add(entry.Guid, this, targetComponent)) {
@@ -269,6 +300,7 @@ namespace UnityEngine.GUID {
 
       entry.MarkRegistered(targetComponent);
 #if UNITY_EDITOR
+      GuidEditorMapping.Remember(targetComponent, entry.Guid);
       EditorUtility.SetDirty(this);
 #endif
     }
@@ -299,6 +331,9 @@ namespace UnityEngine.GUID {
 
       if (this.guid == guid) {
         serializedGuid = guid.ToByteArray();
+#if UNITY_EDITOR
+        GuidEditorMapping.Remember(this, guid);
+#endif
         return;
       }
 
@@ -318,6 +353,10 @@ namespace UnityEngine.GUID {
         serializedGuid = previousSerializedGuid;
         return;
       }
+
+      #if UNITY_EDITOR
+        GuidEditorMapping.Remember(this, guid);
+      #endif
 
       if (previousGuid != System.Guid.Empty) {
         GuidManager.Remove(previousGuid);
