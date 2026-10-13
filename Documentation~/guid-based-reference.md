@@ -15,7 +15,7 @@ William Armstrong williama@unity3d.com
 
 ### Component references
 Use `GuidReference<T>` to reference a specific component. `T` must derive from `Component`.
-Choose the component in the Inspector; a `GuidComponent` is added to its GameObject if needed.
+Choose the component in the Inspector or use **Browse** to find it in any currently loaded scene, including additively loaded scenes. A `GuidComponent` is added to its GameObject if needed.
 Components of the same type on one GameObject receive separate identifiers.
 
 ```csharp

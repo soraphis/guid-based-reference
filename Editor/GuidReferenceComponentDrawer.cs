@@ -7,6 +7,7 @@ namespace UnityEngine.GUID {
   [CustomPropertyDrawer(typeof(GuidReference<>), true)]
   public class GuidReferenceComponentDrawer : PropertyDrawer {
     private const float ClearButtonWidth = 48f;
+    private const float BrowseButtonWidth = 58f;
 
     public override float GetPropertyHeight (SerializedProperty property, GUIContent label) {
       return EditorGUIUtility.singleLineHeight;
@@ -25,9 +26,11 @@ namespace UnityEngine.GUID {
       EditorGUI.BeginProperty(position, label, property);
 
       Rect fieldRect = position;
+      fieldRect.width -= BrowseButtonWidth;
       if (guid != System.Guid.Empty) {
         fieldRect.width -= ClearButtonWidth;
       }
+      fieldRect.width = Mathf.Max(0f, fieldRect.width);
 
       GUIContent fieldLabel = label;
       if (currentComponent == null && guid != System.Guid.Empty && !string.IsNullOrEmpty(nameProperty.stringValue)) {
@@ -42,9 +45,21 @@ namespace UnityEngine.GUID {
         AssignReference(selectedComponent, guidProperty, nameProperty, sceneProperty);
       }
 
+      Rect browseRect = position;
+      browseRect.xMin = position.xMax - BrowseButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
+      browseRect.width = BrowseButtonWidth;
+      if (GUI.Button(browseRect, new GUIContent("Browse", "Choose a matching component from a loaded scene."), EditorStyles.miniButton)) {
+        GuidReferenceComponentPicker picker = new GuidReferenceComponentPicker(componentType);
+        picker.OnComponentSelected += component => {
+          AssignReference(component, guidProperty, nameProperty, sceneProperty);
+          property.serializedObject.ApplyModifiedProperties();
+        };
+        picker.Show(browseRect);
+      }
+
       if (guid != System.Guid.Empty) {
         Rect clearRect = position;
-        clearRect.xMin = fieldRect.xMax;
+        clearRect.xMin = position.xMax - ClearButtonWidth;
         if (GUI.Button(clearRect, "Clear", EditorStyles.miniButton)) {
           AssignReference(null, guidProperty, nameProperty, sceneProperty);
         }
