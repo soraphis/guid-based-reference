@@ -64,7 +64,7 @@ public class UsesComponentGuid : MonoBehaviour
 }
 ```
 
-The target GameObject needs a `GuidComponent`; the Inspector adds one when needed. `targetCollider.Component` returns `null` while the target component is not loaded. `targetCollider.gameObject` returns its GameObject.
+The target GameObject needs a `GuidComponent`; the Inspector adds one when needed. `targetCollider.Component` returns `null` while the target component is not loaded. `targetCollider.gameObject` returns its GameObject. The reference menu can copy its GUID, select a loaded target in the Hierarchy, or open its containing scene additively.
 
 ---
 
@@ -94,7 +94,7 @@ The target GameObject needs a `GuidComponent`; the Inspector adds one when neede
 * Used Saucy/guid-based-reference as source for package manager structure
 * Added a SetGUI method that is required for Save/Load systems ([original issue #27](https://github.com/Unity-Technologies/guid-based-reference/issues/27))
 * Simple fix for selecting multiple objects ([original issue #17](https://github.com/Unity-Technologies/guid-based-reference/issues/17))
-* Added persistent GUIDs for individual components, typed `GuidReference<T>` references, and an Inspector picker for loaded scenes. This feature is based on the approach in [EmreDogann's stable `v1` branch](https://github.com/EmreDogann/unity-guid-reference/tree/v1).
+* Added persistent GUIDs for individual components, typed `GuidReference<T>` references, and an Inspector picker with copy/select/open-scene actions. This feature is based on the approach in [EmreDogann's stable `v1` branch](https://github.com/EmreDogann/unity-guid-reference/tree/v1).
 * Updated the package minimum to Unity 6.3 and replaced the legacy edit-mode/prefab-stage APIs with their current equivalents.
 * Improved prefab stability by excluding prefab assets, prefab stages, and preview scenes from GUID assignment, and preserving an existing GUID when Unity temporarily clears its serialized data during prefab operations.
 * Added regression coverage for prefab contents and temporarily cleared GUID data; prefab tests now use `PrefabUtility.SaveAsPrefabAsset`.

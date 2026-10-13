@@ -8,6 +8,7 @@ namespace UnityEngine.GUID {
   public class GuidReferenceComponentDrawer : PropertyDrawer {
     private const float ClearButtonWidth = 48f;
     private const float BrowseButtonWidth = 58f;
+    private const float ActionsButtonWidth = 22f;
 
     public override float GetPropertyHeight (SerializedProperty property, GUIContent label) {
       return EditorGUIUtility.singleLineHeight;
@@ -15,6 +16,7 @@ namespace UnityEngine.GUID {
 
     public override void OnGUI (Rect position, SerializedProperty property, GUIContent label) {
       SerializedProperty guidProperty = property.FindPropertyRelative("serializedGuid");
+      SerializedProperty gameObjectNameProperty = property.FindPropertyRelative("cachedGameObjectName");
       SerializedProperty nameProperty = property.FindPropertyRelative("cachedName");
       SerializedProperty sceneProperty = property.FindPropertyRelative("cachedScene");
       Type componentType = GetComponentType();
@@ -26,7 +28,7 @@ namespace UnityEngine.GUID {
       EditorGUI.BeginProperty(position, label, property);
 
       Rect fieldRect = position;
-      fieldRect.width -= BrowseButtonWidth;
+      fieldRect.width -= BrowseButtonWidth + ActionsButtonWidth;
       if (guid != System.Guid.Empty) {
         fieldRect.width -= ClearButtonWidth;
       }
@@ -37,7 +39,10 @@ namespace UnityEngine.GUID {
         string sceneName = sceneProperty.objectReferenceValue != null
           ? ((SceneAsset)sceneProperty.objectReferenceValue).name
           : "not loaded";
-        fieldLabel = new GUIContent($"{label.text} ({nameProperty.stringValue}, {sceneName})");
+        string targetName = string.IsNullOrEmpty(gameObjectNameProperty.stringValue)
+          ? nameProperty.stringValue
+          : $"{gameObjectNameProperty.stringValue} / {nameProperty.stringValue}";
+        fieldLabel = new GUIContent($"{label.text} ({targetName}, {sceneName})");
       }
 
       Component selectedComponent = EditorGUI.ObjectField(fieldRect, fieldLabel, currentComponent, componentType, true) as Component;
@@ -46,7 +51,7 @@ namespace UnityEngine.GUID {
       }
 
       Rect browseRect = position;
-      browseRect.xMin = position.xMax - BrowseButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
+      browseRect.xMin = position.xMax - BrowseButtonWidth - ActionsButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
       browseRect.width = BrowseButtonWidth;
       if (GUI.Button(browseRect, new GUIContent("Browse", "Choose a matching component from a loaded scene."), EditorStyles.miniButton)) {
         GuidReferenceComponentPicker picker = new GuidReferenceComponentPicker(componentType);
@@ -55,6 +60,41 @@ namespace UnityEngine.GUID {
           property.serializedObject.ApplyModifiedProperties();
         };
         picker.Show(browseRect);
+      }
+
+      Rect actionsRect = position;
+      actionsRect.xMin = position.xMax - ActionsButtonWidth - (guid != System.Guid.Empty ? ClearButtonWidth : 0f);
+      actionsRect.width = ActionsButtonWidth;
+      GUIContent actionsContent = EditorGUIUtility.IconContent("_Popup");
+      actionsContent.tooltip = "Reference actions";
+      if (EditorGUI.DropdownButton(actionsRect, actionsContent, FocusType.Passive, EditorStyles.miniButton)) {
+        GenericMenu menu = new GenericMenu();
+        if (guid == System.Guid.Empty) {
+          menu.AddDisabledItem(new GUIContent("Copy GUID"));
+        } else {
+          menu.AddItem(new GUIContent("Copy GUID"), false, () => EditorGUIUtility.systemCopyBuffer = guid.ToString("N"));
+        }
+
+        if (currentComponent != null) {
+          menu.AddItem(new GUIContent("Select in Hierarchy"), false, () => {
+            Selection.activeObject = currentComponent.gameObject;
+            EditorGUIUtility.PingObject(currentComponent.gameObject);
+          });
+        } else {
+          menu.AddDisabledItem(new GUIContent("Select in Hierarchy"));
+        }
+
+        SceneAsset targetScene = sceneProperty.objectReferenceValue as SceneAsset;
+        if (targetScene != null) {
+          menu.AddItem(new GUIContent("Open Containing Scene Additively"), false, () => {
+            string scenePath = AssetDatabase.GetAssetPath(targetScene);
+            EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+          });
+        } else {
+          menu.AddDisabledItem(new GUIContent("Open Containing Scene Additively"));
+        }
+
+        menu.ShowAsContext();
       }
 
       if (guid != System.Guid.Empty) {
@@ -103,6 +143,7 @@ namespace UnityEngine.GUID {
     private static void AssignReference (Component component, SerializedProperty guidProperty, SerializedProperty nameProperty, SerializedProperty sceneProperty) {
       if (component == null) {
         WriteGuid(guidProperty, System.Guid.Empty);
+        gameObjectNameProperty.stringValue = string.Empty;
         nameProperty.stringValue = string.Empty;
         sceneProperty.objectReferenceValue = null;
         return;
@@ -124,6 +165,7 @@ namespace UnityEngine.GUID {
       }
 
       WriteGuid(guidProperty, guid);
+      gameObjectNameProperty.stringValue = component.gameObject.name;
       nameProperty.stringValue = component.GetType().Name;
       string scenePath = component.gameObject.scene.path;
       sceneProperty.objectReferenceValue = AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath);

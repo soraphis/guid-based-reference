@@ -103,6 +103,9 @@ namespace UnityEngine.GUID {
     private System.Guid guid;
 
 #if UNITY_EDITOR
+  [SerializeField]
+  private string cachedGameObjectName;
+
     [SerializeField]
     private string cachedName;
 
